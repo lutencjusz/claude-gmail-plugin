@@ -37,6 +37,14 @@ def test_create_dry_run_does_not_append(fake_imap):
     assert fake_imap.appended == []
 
 
+def test_create_dry_run_without_creds_uses_placeholder(fake_imap):
+    # dry-run nie powinien wymagac .env — placeholder nadawcy jak w send.send
+    res = drafts.create(to="x@y.pl", subject="S", body="B", dry_run=True, imap=fake_imap)
+    assert res["dry_run"] is True
+    assert res["from"] == "me@gmail.com"
+    assert fake_imap.appended == []
+
+
 def test_get_returns_full_draft(fake_imap):
     from email.message import EmailMessage
     fake_imap.search_result = ("OK", [b"7"])

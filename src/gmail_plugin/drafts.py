@@ -13,7 +13,7 @@ from .imap_client import (
 )
 from .mime_build import build_message
 from .query import raw_criteria
-from .send import _smtp_ctx
+from .send import _resolve_sender, _smtp_ctx
 
 
 def _conn(imap, creds):
@@ -26,10 +26,8 @@ def create(
     to, subject, body, html=False, attachments=None, dry_run=False,
     *, creds=None, creds_user=None, imap=None,
 ):
-    sender = creds_user or (creds.user if creds else None)
-    if sender is None:
-        creds = creds or load_credentials()
-        sender = creds.user
+    # dry-run nie wymaga .env (placeholder nadawcy), tak jak w send.send
+    sender = _resolve_sender(creds, creds_user, dry_run)
     if dry_run:
         return {"dry_run": True, "from": sender, "to": to, "subject": subject,
                 "html": html, "attachments": list(attachments or [])}
