@@ -546,6 +546,10 @@ from .config import (
 _HEADER_FIELDS = "FROM SUBJECT DATE X-GM-MSGID X-GM-THRID MESSAGE-ID"
 
 
+class IMAPError(Exception):
+    """Operacja IMAP zwrocila status inny niz OK."""
+
+
 @contextmanager
 def imap_connection(creds: Credentials):
     conn = imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT)
@@ -619,12 +623,16 @@ def fetch_full(imap, folder: str, uid: int) -> Message | None:
 
 
 def append_draft(imap, folder: str, message: Message) -> None:
-    imap.append(folder, "(\\Draft)", None, message.as_bytes())
+    typ, _ = imap.append(folder, "(\\Draft)", None, message.as_bytes())
+    if typ != "OK":
+        raise IMAPError(f"APPEND do {folder} nieudany: {typ}")
 
 
 def delete_uid(imap, folder: str, uid: int) -> None:
     imap.select(folder, readonly=False)
-    imap.uid("STORE", str(uid), "+FLAGS", "(\\Deleted)")
+    typ, _ = imap.uid("STORE", str(uid), "+FLAGS", "(\\Deleted)")
+    if typ != "OK":
+        raise IMAPError(f"STORE \\Deleted dla UID {uid} nieudany: {typ}")
     imap.expunge()
 
 
@@ -853,24 +861,20 @@ from .mime_build import build_message
 from .messages import get as get_message
 
 
-def _smtp(smtp, creds):
+def _resolve_sender(creds, creds_user, dry_run):
+    if creds_user:
+        return creds_user
+    if creds:
+        return creds.user
+    if not dry_run:
+        return load_credentials().user
+    return "me@gmail.com"
+
+
+def _smtp_ctx(smtp):
     if smtp is not None:
         return nullcontext(smtp)
-    conn = smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT)
-    conn.login(creds.user, creds.password)
-    return conn
-
-
-def _plan(to, subject, body, html, attachments, reply_to, sender, dry_run):
-    return {
-        "dry_run": dry_run,
-        "from": sender,
-        "to": to,
-        "subject": subject,
-        "html": html,
-        "attachments": list(attachments or []),
-        "reply_to": reply_to,
-    }
+    return smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT)
 
 
 def send(
@@ -878,16 +882,20 @@ def send(
     dry_run=False, *, creds=None, creds_user=None, creds_password=None,
     smtp=None, imap=None,
 ):
-    sender = creds_user or (creds.user if creds else None)
-    if sender is None and not dry_run:
-        creds = creds or load_credentials()
-        sender = creds.user
-    sender = sender or (creds.user if creds else "me@gmail.com")
+    sender = _resolve_sender(creds, creds_user, dry_run)
 
-    plan = _plan(to, subject, body, html, attachments, reply_to, sender, dry_run)
     if dry_run:
-        return plan
+        return {
+            "dry_run": True,
+            "from": sender,
+            "to": to,
+            "subject": subject,
+            "html": html,
+            "attachments": list(attachments or []),
+            "reply_to": reply_to,
+        }
 
+    # naglowki watku przy odpowiedzi
     in_reply_to = references = None
     subj = subject
     if reply_to:
@@ -897,21 +905,20 @@ def send(
             if not subj.lower().startswith("re:"):
                 subj = f"Re: {subj}"
 
-    if creds is None:
-        creds = load_credentials() if creds_password is None else None
-    password = creds_password or (creds.password if creds else None)
-    user = sender
+    # poswiadczenia do logowania SMTP
+    if creds_password is not None:
+        user, password = sender, creds_password
+    else:
+        c = creds or load_credentials()
+        user, password, sender = c.user, c.password, c.user
 
     msg = build_message(
-        sender=user, to=to, subject=subj, body=body, html=html,
+        sender=sender, to=to, subject=subj, body=body, html=html,
         attachments=attachments, in_reply_to=in_reply_to, references=references,
     )
 
-    class _C:
-        pass
-    c = _C(); c.user = user; c.password = password
-    with _smtp(smtp, c) as conn:
-        conn.login(user, password) if smtp is not None else None
+    with _smtp_ctx(smtp) as conn:
+        conn.login(user, password)
         conn.send_message(msg)
     return {"sent": True, "to": to, "subject": subj}
 ```
