@@ -1091,7 +1091,8 @@ def send(msgid, dry_run=False, *, creds=None, creds_user=None,
 
     if creds is None and creds_password is None:
         creds = load_credentials()
-    user = creds_user or (creds.user if creds else None)
+    # user rozwiazywany tak jak w send.send (brak foot-guna user=None)
+    user = _resolve_sender(creds, creds_user, dry_run=False)
     password = creds_password or (creds.password if creds else None)
 
     with _conn(imap, creds) as conn:
