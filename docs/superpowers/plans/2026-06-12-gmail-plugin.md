@@ -1030,9 +1030,7 @@ Expected: FAIL — `ModuleNotFoundError: gmail_plugin.drafts`.
 # src/gmail_plugin/drafts.py
 from contextlib import nullcontext
 
-import smtplib
-
-from .config import DRAFTS_FOLDER, SMTP_HOST, SMTP_PORT, load_credentials
+from .config import DRAFTS_FOLDER, load_credentials
 from .imap_client import (
     append_draft,
     delete_uid,
@@ -1045,6 +1043,7 @@ from .imap_client import (
 )
 from .mime_build import build_message
 from .query import raw_criteria
+from .send import _smtp_ctx
 
 
 def _conn(imap, creds):
@@ -1107,8 +1106,7 @@ def send(msgid, dry_run=False, *, creds=None, creds_user=None,
         to = (msg.get("To") or "").strip()
         subject = (msg.get("Subject") or "").strip()
 
-        smtp_ctx = nullcontext(smtp) if smtp is not None else smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT)
-        with smtp_ctx as s:
+        with _smtp_ctx(smtp) as s:
             s.login(user, password)
             s.send_message(msg)
 
