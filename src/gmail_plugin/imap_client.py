@@ -1,4 +1,5 @@
 import email
+import email.policy
 import imaplib
 from contextlib import contextmanager
 from email.message import Message
@@ -85,7 +86,7 @@ def fetch_full(imap, folder: str, uid: int) -> Message | None:
     if typ != "OK" or not data or data[0] is None:
         return None
     raw = data[0][1] if isinstance(data[0], tuple) else data[0]
-    return email.message_from_bytes(raw)
+    return email.message_from_bytes(raw, policy=email.policy.default)
 
 
 def append_draft(imap, folder: str, message: Message) -> None:
