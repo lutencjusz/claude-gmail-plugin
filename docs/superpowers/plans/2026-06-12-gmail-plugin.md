@@ -452,6 +452,10 @@ class FakeIMAP:
         self.appended.append((mailbox, flags, message))
         return ("OK", [b"[APPENDUID 1 99]"])
 
+    def expunge(self):
+        self.expunged = True
+        return ("OK", [b"1"])
+
     def logout(self):
         self.logged_out = True
         return ("BYE", [b"logout"])
@@ -616,6 +620,12 @@ def fetch_full(imap, folder: str, uid: int) -> Message | None:
 
 def append_draft(imap, folder: str, message: Message) -> None:
     imap.append(folder, "(\\Draft)", None, message.as_bytes())
+
+
+def delete_uid(imap, folder: str, uid: int) -> None:
+    imap.select(folder, readonly=False)
+    imap.uid("STORE", str(uid), "+FLAGS", "(\\Deleted)")
+    imap.expunge()
 
 
 def parse_full(msg: Message) -> dict:
@@ -926,6 +936,8 @@ git commit -m "feat(send): plan wysylki, --dry-run bez sieci, SMTP, reply-thread
 - Create: `src/gmail_plugin/drafts.py`
 - Test: `tests/test_drafts.py`
 
+Wymaga `delete_uid` i `expunge` z Task 5 (dodane w `imap_client.py` / `FakeIMAP`).
+
 - [ ] **Step 1: Napisz failing test**
 
 ```python
@@ -959,6 +971,41 @@ def test_create_dry_run_does_not_append(fake_imap):
     )
     assert res["dry_run"] is True
     assert fake_imap.appended == []
+
+
+def test_get_returns_full_draft(fake_imap):
+    from email.message import EmailMessage
+    fake_imap.search_result = ("OK", [b"7"])
+    m = EmailMessage()
+    m["From"] = "me@gmail.com"
+    m["Subject"] = "Szkic"
+    m.set_content("Robocza tresc")
+    fake_imap.fetch_results["7"] = ("OK", [(b"7 (..)", m.as_bytes())])
+    out = drafts.get("555", imap=fake_imap)
+    assert out["subject"] == "Szkic"
+    assert "Robocza tresc" in out["body_text"]
+
+
+def test_send_dry_run_does_not_send(fake_imap, fake_smtp):
+    plan = drafts.send("555", dry_run=True, imap=fake_imap, smtp=fake_smtp)
+    assert plan["dry_run"] is True
+    assert fake_smtp.sent == []
+
+
+def test_send_sends_and_deletes_draft(fake_imap, fake_smtp):
+    from email.message import EmailMessage
+    fake_imap.search_result = ("OK", [b"7"])
+    m = EmailMessage()
+    m["From"] = "me@gmail.com"
+    m["To"] = "x@y.pl"
+    m["Subject"] = "Szkic"
+    m.set_content("Robocza tresc")
+    fake_imap.fetch_results["7"] = ("OK", [(b"7 (..)", m.as_bytes())])
+    res = drafts.send("555", dry_run=False, creds_user="me@gmail.com",
+                      creds_password="abcdefghijklmnop", imap=fake_imap, smtp=fake_smtp)
+    assert res["sent"] is True
+    assert len(fake_smtp.sent) == 1
+    assert getattr(fake_imap, "expunged", False) is True
 ```
 
 - [ ] **Step 2: Uruchom test — ma się wywalić**
@@ -972,8 +1019,19 @@ Expected: FAIL — `ModuleNotFoundError: gmail_plugin.drafts`.
 # src/gmail_plugin/drafts.py
 from contextlib import nullcontext
 
-from .config import DRAFTS_FOLDER, load_credentials
-from .imap_client import append_draft, fetch_headers, imap_connection, search_uids
+import smtplib
+
+from .config import DRAFTS_FOLDER, SMTP_HOST, SMTP_PORT, load_credentials
+from .imap_client import (
+    append_draft,
+    delete_uid,
+    fetch_full,
+    fetch_headers,
+    imap_connection,
+    parse_full,
+    search_uids,
+    uid_for_gmail_id,
+)
 from .mime_build import build_message
 from .query import raw_criteria
 
@@ -1007,18 +1065,57 @@ def list_drafts(limit=20, *, creds=None, imap=None):
     with _conn(imap, creds) as conn:
         uids = search_uids(conn, DRAFTS_FOLDER, criteria, limit=limit)
         return fetch_headers(conn, DRAFTS_FOLDER, uids)
+
+
+def get(msgid, *, creds=None, imap=None):
+    with _conn(imap, creds) as conn:
+        uid = uid_for_gmail_id(conn, DRAFTS_FOLDER, "X-GM-MSGID", msgid)
+        if uid is None:
+            return None
+        msg = fetch_full(conn, DRAFTS_FOLDER, uid)
+        return parse_full(msg) if msg is not None else None
+
+
+def send(msgid, dry_run=False, *, creds=None, creds_user=None,
+         creds_password=None, imap=None, smtp=None):
+    if dry_run:
+        return {"dry_run": True, "msgid": msgid, "action": "send-draft"}
+
+    if creds is None and creds_password is None:
+        creds = load_credentials()
+    user = creds_user or (creds.user if creds else None)
+    password = creds_password or (creds.password if creds else None)
+
+    with _conn(imap, creds) as conn:
+        uid = uid_for_gmail_id(conn, DRAFTS_FOLDER, "X-GM-MSGID", msgid)
+        if uid is None:
+            return None
+        msg = fetch_full(conn, DRAFTS_FOLDER, uid)
+        if msg is None:
+            return None
+        to = (msg.get("To") or "").strip()
+        subject = (msg.get("Subject") or "").strip()
+
+        smtp_ctx = nullcontext(smtp) if smtp is not None else smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT)
+        with smtp_ctx as s:
+            s.login(user, password)
+            s.send_message(msg)
+
+        delete_uid(conn, DRAFTS_FOLDER, uid)
+
+    return {"sent": True, "to": to, "subject": subject, "deleted_draft": True}
 ```
 
 - [ ] **Step 4: Uruchom test — ma przejść**
 
 Run: `cd /c/claude/gmail-plugin && uv run pytest tests/test_drafts.py -v`
-Expected: PASS (3 passed).
+Expected: PASS (6 passed).
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add src/gmail_plugin/drafts.py tests/test_drafts.py
-git commit -m "feat(drafts): tworzenie (APPEND \\Draft), listowanie, dry-run"
+git commit -m "feat(drafts): tworzenie/lista/get/send (APPEND, SMTP, delete po wyslaniu)"
 ```
 
 ---
@@ -1131,6 +1228,11 @@ def main(argv=None) -> int:
     d_create.add_argument("--dry-run", action="store_true")
     d_list = draft_sub.add_parser("list")
     d_list.add_argument("--limit", type=int, default=20)
+    d_get = draft_sub.add_parser("get")
+    d_get.add_argument("msgid")
+    d_send = draft_sub.add_parser("send")
+    d_send.add_argument("msgid")
+    d_send.add_argument("--dry-run", action="store_true")
 
     args = parser.parse_args(argv)
 
@@ -1155,6 +1257,10 @@ def main(argv=None) -> int:
                                            dry_run=args.dry_run))
             if args.draft_cmd == "list":
                 return _emit(drafts.list_drafts(limit=args.limit))
+            if args.draft_cmd == "get":
+                return _emit(drafts.get(args.msgid))
+            if args.draft_cmd == "send":
+                return _emit(drafts.send(args.msgid, dry_run=args.dry_run))
     except ConfigError as e:
         print(json.dumps({"error": "config", "message": str(e)}, ensure_ascii=False), file=sys.stderr)
         return 2
@@ -1295,12 +1401,12 @@ gmail send --to "x@y.pl" --subject "Re: Oferta" --body "Dziekuje." --reply-to 17
 ```markdown
 ---
 name: gmail-drafts
-description: Use when creating or listing Gmail drafts. Triggers: "utwórz szkic na gmailu", "zapisz wersję roboczą gmail", "pokaż szkice gmail".
+description: Use when creating, listing, reading or sending Gmail drafts. Triggers: "utwórz szkic na gmailu", "zapisz wersję roboczą gmail", "pokaż szkice gmail", "wyślij szkic".
 ---
 
 # gmail-drafts
 
-Tworzenie i listowanie szkiców (IMAP APPEND do `[Gmail]/Drafts`).
+Operacje na szkicach Gmaila (IMAP APPEND/SEARCH/DELETE do `[Gmail]/Drafts`).
 
 ## Użycie
 
@@ -1313,10 +1419,19 @@ gmail draft create --to "x@y.pl" --subject "Szkic" --body "Tresc."
 
 # Lista szkicow
 gmail draft list --limit 10
+
+# Pelna tresc szkicu po msgid (z listy)
+gmail draft get 17000000000000001
+
+# Wyslanie szkicu (usuwa go z Drafts po wyslaniu)
+gmail draft send 17000000000000001 --dry-run   # podglad
+gmail draft send 17000000000000001             # po akceptacji
 \`\`\`
 
 ## Zasady
-- Tworzenie szkicu nie wysyła wiadomości; to bezpieczna operacja.
+- `create`, `list`, `get` są bezpieczne (nie wysyłają).
+- **`draft send` to akcja wychodząca** — najpierw `--dry-run`, pokaż użytkownikowi,
+  wyślij dopiero po zgodzie. Po wysyłce szkic jest usuwany z `Drafts`.
 ```
 
 - [ ] **Step 5: Commit**
@@ -1433,7 +1548,7 @@ git commit -m "docs: CLAUDE.md i README (instalacja, junctions, konwencje)"
 - Transport IMAP/SMTP + X-GM-RAW → Task 3, 5, 6. ✓
 - Odczyt/wyszukiwanie/get/thread → Task 6. ✓
 - Wysyłka + reply + dry-run → Task 7. ✓
-- Drafty (APPEND) → Task 8. ✓
+- Drafty: create/list/get/send (APPEND, SMTP, delete) → Task 8. ✓
 - Sekrety z `.env`, redakcja, inwariant „brak hasła w outpucie" → Task 2 (repr), 7 (test_plan_never_contains_password). ✓
 - auth-status (setup) → Task 9 + skill Task 10. ✓
 - CLI JSON, dry-run bez sieci → Task 9, 7, 8. ✓
@@ -1444,7 +1559,7 @@ git commit -m "docs: CLAUDE.md i README (instalacja, junctions, konwencje)"
 - `send.send` ma rozbudowaną logikę poświadczeń (dry-run bez sieci vs realna wysyłka) —
   przy implementacji trzymaj się testów z Task 7 jako kontraktu; uprość, jeśli da się
   zachować zachowanie testów.
-- `draft send` (wysyłka szkicu) jest poza tym planem (YAGNI dla v0.1 — tworzenie i lista
-  wystarczają); dodanie później to osobne zadanie analogiczne do Task 7 + usunięcie z Drafts.
+- `draft send` (Task 8) wysyła szkic przez SMTP i usuwa go z `Drafts` (\\Deleted + expunge).
+  To akcja wychodząca — skill wymaga `--dry-run` + zgody użytkownika przed realną wysyłką.
 ```
 
