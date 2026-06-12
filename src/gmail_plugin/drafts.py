@@ -80,6 +80,7 @@ def send(msgid, dry_run=False, *, creds=None, creds_user=None,
             s.login(user, password)
             s.send_message(msg)
 
+        # Usuniecie szkicu jest best-effort; mail jest juz wyslany, jesli tu dotarlismy.
         delete_uid(conn, DRAFTS_FOLDER, uid)
 
     return {"sent": True, "to": to, "subject": subject, "deleted_draft": True}

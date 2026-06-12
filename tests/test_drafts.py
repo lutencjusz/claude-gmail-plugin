@@ -1,6 +1,14 @@
 from gmail_plugin import drafts
 
 
+def test_send_missing_draft_returns_none(fake_imap, fake_smtp):
+    fake_imap.search_result = ("OK", [b""])
+    res = drafts.send("brak", dry_run=False, creds_user="me@gmail.com",
+                      creds_password="abcdefghijklmnop", imap=fake_imap, smtp=fake_smtp)
+    assert res is None
+    assert fake_smtp.sent == []
+
+
 def test_create_appends_to_drafts_folder(fake_imap):
     res = drafts.create(
         to="x@y.pl", subject="Szkic", body="Tresc",

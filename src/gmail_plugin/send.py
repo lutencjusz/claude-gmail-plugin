@@ -18,7 +18,8 @@ def _resolve_sender(creds, creds_user, dry_run):
 
 @contextmanager
 def _smtp_ctx(smtp):
-    # wstrzykniety fake albo realne SMTP_SSL; polaczenie zawsze zamkniete
+    # wstrzykniety fake albo realne SMTP_SSL; polaczenie zawsze zamkniete.
+    # Reuzywane przez drafts.send.
     if smtp is not None:
         yield smtp
     else:
