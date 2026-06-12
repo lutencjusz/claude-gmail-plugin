@@ -24,6 +24,9 @@ class Credentials:
     def __repr__(self) -> str:
         return f"Credentials(user={self.user!r}, password=<redacted>)"
 
+    # UWAGA: __repr__/__str__ redaguja haslo, ale dataclasses.asdict(creds)
+    # zwroci je jawnie. Nie serializuj Credentials do logow/outputu.
+
 
 def default_env_path() -> Path:
     override = os.environ.get("GMAIL_PLUGIN_ENV")

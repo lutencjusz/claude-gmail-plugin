@@ -30,4 +30,5 @@ def test_repr_redacts_password(tmp_path):
     env = _write_env(tmp_path, "GMAIL_USER=me@gmail.com\nGMAIL_APP_PASSWORD=secret1234567890\n")
     creds = load_credentials(env)
     assert "secret1234567890" not in repr(creds)
+    assert "secret1234567890" not in str(creds)
     assert "redacted" in repr(creds).lower()
