@@ -376,8 +376,8 @@ def build_message(
         msg["References"] = references
 
     if html:
-        msg.set_content("Wiadomosc w formacie HTML.")
-        msg.add_alternative(body, subtype="html")
+        # jednoczesciowa wiadomosc text/html (get_content_type() == "text/html")
+        msg.set_content(body, subtype="html")
     else:
         msg.set_content(body)
 
