@@ -12,6 +12,10 @@ from .config import (
 _HEADER_FIELDS = "FROM SUBJECT DATE X-GM-MSGID X-GM-THRID MESSAGE-ID"
 
 
+class IMAPError(Exception):
+    """Operacja IMAP zwrocila status inny niz OK."""
+
+
 @contextmanager
 def imap_connection(creds: Credentials):
     conn = imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT)
@@ -85,12 +89,16 @@ def fetch_full(imap, folder: str, uid: int) -> Message | None:
 
 
 def append_draft(imap, folder: str, message: Message) -> None:
-    imap.append(folder, "(\\Draft)", None, message.as_bytes())
+    typ, _ = imap.append(folder, "(\\Draft)", None, message.as_bytes())
+    if typ != "OK":
+        raise IMAPError(f"APPEND do {folder} nieudany: {typ}")
 
 
 def delete_uid(imap, folder: str, uid: int) -> None:
     imap.select(folder, readonly=False)
-    imap.uid("STORE", str(uid), "+FLAGS", "(\\Deleted)")
+    typ, _ = imap.uid("STORE", str(uid), "+FLAGS", "(\\Deleted)")
+    if typ != "OK":
+        raise IMAPError(f"STORE \\Deleted dla UID {uid} nieudany: {typ}")
     imap.expunge()
 
 

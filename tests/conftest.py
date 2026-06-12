@@ -25,7 +25,7 @@ class FakeIMAP:
         if command == "SEARCH":
             return self.search_result
         if command == "FETCH":
-            return self.fetch_results.get(args[0], ("OK", [None]))
+            return self.fetch_results.get(args[0], ("NO", [None]))
         return ("OK", [None])
 
     def append(self, mailbox, flags, date_time, message):
