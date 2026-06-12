@@ -1,5 +1,5 @@
 import smtplib
-from contextlib import nullcontext
+from contextlib import contextmanager
 
 from .config import SMTP_HOST, SMTP_PORT, load_credentials
 from .mime_build import build_message
@@ -16,10 +16,14 @@ def _resolve_sender(creds, creds_user, dry_run):
     return "me@gmail.com"
 
 
+@contextmanager
 def _smtp_ctx(smtp):
+    # wstrzykniety fake albo realne SMTP_SSL; polaczenie zawsze zamkniete
     if smtp is not None:
-        return nullcontext(smtp)
-    return smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT)
+        yield smtp
+    else:
+        with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as conn:
+            yield conn
 
 
 def send(

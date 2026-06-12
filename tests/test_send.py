@@ -1,4 +1,25 @@
+from email.message import EmailMessage
+
 from gmail_plugin import send
+
+
+def test_reply_sets_threading_headers(fake_imap, fake_smtp):
+    # oryginal pobierany przez messages.get (imap) -> ustaw In-Reply-To/References i "Re:"
+    fake_imap.search_result = ("OK", [b"5"])
+    orig = EmailMessage()
+    orig["Message-ID"] = "<orig@mail>"
+    orig["Subject"] = "Pytanie"
+    orig.set_content("q")
+    fake_imap.fetch_results["5"] = ("OK", [(b"5 (..)", orig.as_bytes())])
+    send.send(
+        to="x@y.pl", subject="Odpowiedz", body="ok", reply_to="999",
+        creds_user="me@gmail.com", creds_password="abcdefghijklmnop",
+        smtp=fake_smtp, imap=fake_imap,
+    )
+    sent = fake_smtp.sent[0]
+    assert sent["In-Reply-To"] == "<orig@mail>"
+    assert sent["References"] == "<orig@mail>"
+    assert sent["Subject"].startswith("Re:")
 
 
 def test_dry_run_returns_plan_without_network(fake_smtp):
