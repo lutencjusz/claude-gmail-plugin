@@ -28,3 +28,13 @@ def test_get_missing_returns_none_marker(fake_imap):
     fake_imap.search_result = ("OK", [b""])
     out = messages.get("doesnotexist", imap=fake_imap)
     assert out is None
+
+
+def test_thread_returns_messages_oldest_first(fake_imap):
+    # UID-y nie po kolei -> wynik posortowany rosnaco po uid (najstarsze pierwsze)
+    fake_imap.search_result = ("OK", [b"21 20"])
+    fake_imap.fetch_results["20"] = ("OK", [(b"20 (..)", b"Subject: pierwsza\r\nX-GM-THRID: 900\r\n\r\n")])
+    fake_imap.fetch_results["21"] = ("OK", [(b"21 (..)", b"Subject: druga\r\nX-GM-THRID: 900\r\n\r\n")])
+    rows = messages.thread("900", imap=fake_imap)
+    assert [r["subject"] for r in rows] == ["pierwsza", "druga"]
+    assert [r["uid"] for r in rows] == [20, 21]
