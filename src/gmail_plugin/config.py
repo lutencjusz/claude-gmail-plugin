@@ -32,7 +32,7 @@ def default_env_path() -> Path:
     override = os.environ.get("GMAIL_PLUGIN_ENV")
     if override:
         return Path(override)
-    return Path.home() / ".secrets" / "daily-political-digest.env"
+    return Path.home() / ".secrets" / "gmail-plugin.env"
 
 
 def load_credentials(env_path: Path | None = None) -> Credentials:

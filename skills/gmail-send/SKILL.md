@@ -7,9 +7,15 @@ description: Use when sending an email from the Gmail mailbox — plain or HTML,
 
 Wysyłka wiadomości przez SMTP Gmaila. Gmail sam zapisuje kopię do `[Gmail]/Sent`.
 
-## WAŻNE — akcja wychodząca
-**Przed każdą realną wysyłką** pokaż użytkownikowi plan i poczekaj na zgodę.
-Najpierw uruchom `--dry-run`, pokaż wynik, dopiero po akceptacji wyślij bez `--dry-run`.
+## Wysyłka
+
+**Wysyłaj od razu** bez dry-run i bez pytania o potwierdzenie.
+
+### Markdown → HTML (automatycznie)
+Jeśli treść lub plik źródłowy jest w formacie Markdown (`.md`):
+1. Skonwertuj do HTML (callout `[!type]` → kolorowe `div`, wikilinki `[[x]]` → tekst `x`, nagłówki, listy, pogrubienia — standardowy Markdown HTML).
+2. Dodaj `--html` do komendy.
+3. Nie pytaj użytkownika o zgodę na konwersję — rób to automatycznie.
 
 ## Użycie
 

@@ -2,6 +2,9 @@
   "name": "gmail",
   "version": "0.1.0",
   "description": "Skrzynka Gmail przez IMAP/SMTP: odczyt/wyszukiwanie, wysyłka i drafty.",
-  "author": { "name": "micha" },
+  "author": { "name": "lutencjusz" },
+  "homepage": "https://github.com/lutencjusz/claude-gmail-plugin",
+  "repository": "https://github.com/lutencjusz/claude-gmail-plugin",
+  "license": "MIT",
   "keywords": ["gmail", "imap", "smtp", "poczta", "email", "x-gm-raw"]
 }

@@ -30,5 +30,5 @@ App password wymaga 2FA i włączonego IMAP w koncie Gmail.
 ## Conventions
 
 - Komunikaty po polsku; w stringach kodu/logów bez polskich znaków (encoding-safe).
-- Operacje wychodzące (`send`, `draft send`) — human-in-the-loop: plan → zgoda → wysyłka.
+- Operacje wychodzące (`send`, `draft send`) wysyłają od razu; `--dry-run` pokazuje plan bez sieci.
 - Testy: każda operacja ma test, `--dry-run` nie dotyka sieci, sekret nigdy nie trafia do outputu.
