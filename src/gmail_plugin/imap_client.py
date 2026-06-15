@@ -1,6 +1,7 @@
 import email
 import email.policy
 import imaplib
+import re
 from contextlib import contextmanager
 from email.message import Message
 
@@ -10,7 +11,11 @@ from .config import (
     Credentials,
 )
 
-_HEADER_FIELDS = "FROM SUBJECT DATE X-GM-MSGID X-GM-THRID MESSAGE-ID"
+# X-GM-MSGID / X-GM-THRID to atrybuty rozszerzenia Gmaila (FETCH items), a NIE
+# naglowki RFC822 — przychodza w metadanych odpowiedzi FETCH, nie w tresci naglowka.
+_HEADER_FIELDS = "FROM SUBJECT DATE MESSAGE-ID"
+_GM_MSGID_RE = re.compile(rb"X-GM-MSGID\s+(\d+)")
+_GM_THRID_RE = re.compile(rb"X-GM-THRID\s+(\d+)")
 
 
 class IMAPError(Exception):
@@ -60,11 +65,25 @@ def fetch_headers(imap, folder: str, uids: list[int]) -> list[dict]:
     imap.select(folder, readonly=True)
     out: list[dict] = []
     for uid in uids:
-        typ, data = imap.uid("FETCH", str(uid), f"(BODY.PEEK[HEADER.FIELDS ({_HEADER_FIELDS})])")
+        typ, data = imap.uid(
+            "FETCH",
+            str(uid),
+            f"(X-GM-MSGID X-GM-THRID BODY.PEEK[HEADER.FIELDS ({_HEADER_FIELDS})])",
+        )
         if typ != "OK" or not data or data[0] is None:
             continue
-        raw = data[0][1] if isinstance(data[0], tuple) else data[0]
+        if isinstance(data[0], tuple):
+            meta, raw = data[0][0], data[0][1]
+        else:
+            meta, raw = data[0], b""
         rec = parse_header_response(raw)
+        # msgid/thrid czytamy z metadanych FETCH, bo to atrybuty Gmaila, nie naglowki
+        m = _GM_MSGID_RE.search(meta or b"")
+        t = _GM_THRID_RE.search(meta or b"")
+        if m:
+            rec["msgid"] = m.group(1).decode()
+        if t:
+            rec["thrid"] = t.group(1).decode()
         rec["uid"] = uid
         out.append(rec)
     return out
