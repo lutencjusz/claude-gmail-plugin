@@ -22,6 +22,48 @@ class IMAPError(Exception):
     """Operacja IMAP zwrocila status inny niz OK."""
 
 
+def _quote_mailbox(name: str) -> str:
+    """imaplib.select nie cytuje nazw; nazwy ze spacja (np. 'Wersje robocze') psuja komende."""
+    if name.startswith('"') or not re.search(r'[\s"\()]', name):
+        return name
+    return '"' + name.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def _select(imap, folder: str, readonly: bool = True) -> None:
+    typ, data = imap.select(_quote_mailbox(folder), readonly=readonly)
+    if typ != "OK":
+        raise IMAPError(f"Nie mozna otworzyc folderu {folder}: {typ} {data}")
+
+
+_LIST_RE = re.compile(rb'\((?P<attrs>[^)]*)\)\s+(?:"[^"]*"|NIL)\s+(?P<name>.+)$')
+
+
+def resolve_special_folder(imap, attribute: str, default: str) -> str:
+    """Nazwa folderu po atrybucie special-use (np. Drafts, All), niezalezna od jezyka konta.
+
+    Gmail lokalizuje nazwy ('[Gmail]/Wersje robocze'); atrybut jest staly. Zwraca nazwe
+    w formie z LIST (modified UTF-7), ktora mozna od razu podac do SELECT/APPEND.
+    """
+    try:
+        typ, data = imap.list()
+    except Exception:
+        return default
+    if typ != "OK":
+        return default
+    wanted = attribute.lower().encode()
+    for line in data or []:
+        if not isinstance(line, bytes):
+            continue
+        m = _LIST_RE.match(line.strip())
+        if not m or wanted not in m.group("attrs").lower().split():
+            continue
+        name = m.group("name").strip()
+        if name.startswith(b'"') and name.endswith(b'"'):
+            name = name[1:-1].replace(b'\\"', b'"').replace(b"\\\\", b"\\")
+        return name.decode("ascii", "replace")
+    return default
+
+
 @contextmanager
 def imap_connection(creds: Credentials):
     conn = imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT)
@@ -48,7 +90,7 @@ def parse_header_response(raw: bytes) -> dict:
 
 
 def search_uids(imap, folder: str, criteria: list[str], limit: int | None = None) -> list[int]:
-    imap.select(folder, readonly=True)
+    _select(imap, folder, readonly=True)
     typ, data = imap.uid("SEARCH", None, *criteria)
     if typ != "OK" or not data or data[0] is None:
         return []
@@ -62,7 +104,7 @@ def search_uids(imap, folder: str, criteria: list[str], limit: int | None = None
 def fetch_headers(imap, folder: str, uids: list[int]) -> list[dict]:
     if not uids:
         return []
-    imap.select(folder, readonly=True)
+    _select(imap, folder, readonly=True)
     out: list[dict] = []
     for uid in uids:
         typ, data = imap.uid(
@@ -91,7 +133,7 @@ def fetch_headers(imap, folder: str, uids: list[int]) -> list[dict]:
 
 def uid_for_gmail_id(imap, folder: str, header: str, gmail_id: str) -> int | None:
     """Znajdz UID po X-GM-MSGID lub X-GM-THRID."""
-    imap.select(folder, readonly=True)
+    _select(imap, folder, readonly=True)
     typ, data = imap.uid("SEARCH", None, header, gmail_id)
     if typ != "OK" or not data or data[0] is None:
         return None
@@ -100,7 +142,7 @@ def uid_for_gmail_id(imap, folder: str, header: str, gmail_id: str) -> int | Non
 
 
 def fetch_full(imap, folder: str, uid: int) -> Message | None:
-    imap.select(folder, readonly=True)
+    _select(imap, folder, readonly=True)
     typ, data = imap.uid("FETCH", str(uid), "(BODY.PEEK[])")
     if typ != "OK" or not data or data[0] is None:
         return None
@@ -109,13 +151,13 @@ def fetch_full(imap, folder: str, uid: int) -> Message | None:
 
 
 def append_draft(imap, folder: str, message: Message) -> None:
-    typ, _ = imap.append(folder, "(\\Draft)", None, message.as_bytes())
+    typ, _ = imap.append(_quote_mailbox(folder), "(\\Draft)", None, message.as_bytes())
     if typ != "OK":
         raise IMAPError(f"APPEND do {folder} nieudany: {typ}")
 
 
 def delete_uid(imap, folder: str, uid: int) -> None:
-    imap.select(folder, readonly=False)
+    _select(imap, folder, readonly=False)
     typ, _ = imap.uid("STORE", str(uid), "+FLAGS", "(\\Deleted)")
     if typ != "OK":
         raise IMAPError(f"STORE \\Deleted dla UID {uid} nieudany: {typ}")

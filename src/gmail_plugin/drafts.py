@@ -8,6 +8,7 @@ from .imap_client import (
     fetch_headers,
     imap_connection,
     parse_full,
+    resolve_special_folder,
     search_uids,
     uid_for_gmail_id,
 )
@@ -22,6 +23,10 @@ def _conn(imap, creds):
     return imap_connection(creds or load_credentials())
 
 
+def _drafts_folder(conn):
+    return resolve_special_folder(conn, "\\Drafts", DRAFTS_FOLDER)
+
+
 def create(
     to, subject, body, html=False, attachments=None, dry_run=False,
     *, creds=None, creds_user=None, imap=None,
@@ -34,23 +39,25 @@ def create(
     msg = build_message(sender=sender, to=to, subject=subject, body=body,
                         html=html, attachments=attachments)
     with _conn(imap, creds) as conn:
-        append_draft(conn, DRAFTS_FOLDER, msg)
+        append_draft(conn, _drafts_folder(conn), msg)
     return {"created": True, "to": to, "subject": subject}
 
 
 def list_drafts(limit=20, *, creds=None, imap=None):
     criteria = raw_criteria("in:drafts")
     with _conn(imap, creds) as conn:
-        uids = search_uids(conn, DRAFTS_FOLDER, criteria, limit=limit)
-        return fetch_headers(conn, DRAFTS_FOLDER, uids)
+        folder = _drafts_folder(conn)
+        uids = search_uids(conn, folder, criteria, limit=limit)
+        return fetch_headers(conn, folder, uids)
 
 
 def get(msgid, *, creds=None, imap=None):
     with _conn(imap, creds) as conn:
-        uid = uid_for_gmail_id(conn, DRAFTS_FOLDER, "X-GM-MSGID", msgid)
+        folder = _drafts_folder(conn)
+        uid = uid_for_gmail_id(conn, folder, "X-GM-MSGID", msgid)
         if uid is None:
             return None
-        msg = fetch_full(conn, DRAFTS_FOLDER, uid)
+        msg = fetch_full(conn, folder, uid)
         return parse_full(msg) if msg is not None else None
 
 
@@ -66,10 +73,11 @@ def send(msgid, dry_run=False, *, creds=None, creds_user=None,
     password = creds_password or (creds.password if creds else None)
 
     with _conn(imap, creds) as conn:
-        uid = uid_for_gmail_id(conn, DRAFTS_FOLDER, "X-GM-MSGID", msgid)
+        folder = _drafts_folder(conn)
+        uid = uid_for_gmail_id(conn, folder, "X-GM-MSGID", msgid)
         if uid is None:
             return None
-        msg = fetch_full(conn, DRAFTS_FOLDER, uid)
+        msg = fetch_full(conn, folder, uid)
         if msg is None:
             return None
         to = (msg.get("To") or "").strip()
@@ -80,6 +88,6 @@ def send(msgid, dry_run=False, *, creds=None, creds_user=None,
             s.send_message(msg)
 
         # Usuniecie szkicu jest best-effort; mail jest juz wyslany, jesli tu dotarlismy.
-        delete_uid(conn, DRAFTS_FOLDER, uid)
+        delete_uid(conn, folder, uid)
 
     return {"sent": True, "to": to, "subject": subject, "deleted_draft": True}

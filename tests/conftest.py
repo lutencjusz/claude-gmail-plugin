@@ -11,6 +11,11 @@ class FakeIMAP:
         self.last_uid_call = None
         self.search_result = ("OK", [b""])
         self.fetch_results = {}  # uid(str) -> ("OK", data)
+        self.list_result = ("OK", [
+            rb'(\HasNoChildren) "/" "INBOX"',
+            rb'(\Drafts \HasNoChildren) "/" "[Gmail]/Drafts"',
+            rb'(\All \HasNoChildren) "/" "[Gmail]/All Mail"',
+        ])
 
     def login(self, user, password):
         self.login_args = (user, password)
@@ -19,6 +24,9 @@ class FakeIMAP:
     def select(self, mailbox, readonly=False):
         self.selected = (mailbox, readonly)
         return ("OK", [b"1"])
+
+    def list(self):
+        return self.list_result
 
     def uid(self, command, *args):
         self.last_uid_call = (command, args)

@@ -31,3 +31,5 @@ gmail draft send 17000000000000001             # po akceptacji
 - `create`, `list`, `get` są bezpieczne (nie wysyłają).
 - **`draft send` to akcja wychodząca** — najpierw `--dry-run`, pokaż użytkownikowi,
   wyślij dopiero po zgodzie. Po wysyłce szkic jest usuwany z `Drafts`.
+
+- Folder szkiców jest wykrywany po atrybucie IMAP `\Drafts`, więc działa przy dowolnym języku konta (np. `[Gmail]/Wersje robocze`).

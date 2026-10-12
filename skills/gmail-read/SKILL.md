@@ -30,3 +30,5 @@ gmail thread 17000000000000009
 ## Zasady
 - `search` zwraca From/Subject/Date/msgid/thrid. Pełną treść pobieraj `get` na żądanie.
 - Nie wypisuj pełnych treści wrażliwych wiadomości bez potrzeby.
+
+- `--folder` przyjmuje nazwę folderu tak, jak go widzi konto (może być zlokalizowana, np. `[Gmail]/Wszystkie`); nazwy ze spacją są cytowane automatycznie. `get`/`thread` same znajdują folder „Wszystkie” po atrybucie `\All`.

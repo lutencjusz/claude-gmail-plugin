@@ -78,3 +78,29 @@ def test_send_sends_and_deletes_draft(fake_imap, fake_smtp):
     assert res["sent"] is True
     assert len(fake_smtp.sent) == 1
     assert getattr(fake_imap, "expunged", False) is True
+
+
+def test_create_uses_localized_drafts_folder(fake_imap):
+    fake_imap.list_result = ("OK", [
+        rb'(\HasNoChildren) "/" "INBOX"',
+        rb'(\Drafts \HasNoChildren) "/" "[Gmail]/Wersje robocze"',
+    ])
+    drafts.create(to="x@y.pl", subject="S", body="B",
+                  creds_user="me@gmail.com", imap=fake_imap)
+    assert fake_imap.appended[0][0] == '"[Gmail]/Wersje robocze"'
+
+
+def test_list_selects_quoted_localized_folder(fake_imap):
+    fake_imap.list_result = ("OK", [
+        rb'(\Drafts \HasNoChildren) "/" "[Gmail]/Wersje robocze"',
+    ])
+    fake_imap.search_result = ("OK", [b""])
+    drafts.list_drafts(limit=5, imap=fake_imap)
+    assert fake_imap.selected[0] == '"[Gmail]/Wersje robocze"'
+
+
+def test_folder_falls_back_when_list_fails(fake_imap):
+    fake_imap.list_result = ("NO", [b"err"])
+    drafts.create(to="x@y.pl", subject="S", body="B",
+                  creds_user="me@gmail.com", imap=fake_imap)
+    assert fake_imap.appended[0][0] == "[Gmail]/Drafts"
