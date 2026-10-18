@@ -1,6 +1,6 @@
 ---
 name: gmail-setup
-description: Use when configuring or troubleshooting Gmail access for this plugin — checking that the .env credentials exist and IMAP login works. Triggers: "skonfiguruj gmail", "czy gmail działa", "sprawdź połączenie gmail", "gmail nie loguje".
+description: 'Use when configuring or troubleshooting Gmail access for this plugin — checking that the .env credentials exist and IMAP login works. Triggers: "skonfiguruj gmail", "czy gmail działa", "sprawdź połączenie gmail", "gmail nie loguje".'
 ---
 
 # gmail-setup

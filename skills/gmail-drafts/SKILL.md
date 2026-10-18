@@ -1,6 +1,6 @@
 ---
 name: gmail-drafts
-description: Use when creating, listing, reading or sending Gmail drafts. Triggers: "utwórz szkic na gmailu", "zapisz wersję roboczą gmail", "pokaż szkice gmail", "wyślij szkic".
+description: 'Use when creating, listing, reading or sending Gmail drafts. Triggers: "utwórz szkic na gmailu", "zapisz wersję roboczą gmail", "pokaż szkice gmail", "wyślij szkic".'
 ---
 
 # gmail-drafts

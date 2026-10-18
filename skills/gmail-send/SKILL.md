@@ -1,6 +1,6 @@
 ---
 name: gmail-send
-description: Use when sending an email from the Gmail mailbox — plain or HTML, with attachments or as a reply. Triggers: "wyślij maila z gmaila", "odpowiedz na wiadomość gmail", "wyślij załącznik gmailem".
+description: 'Use when sending an email from the Gmail mailbox — plain or HTML, with attachments or as a reply. Triggers: "wyślij maila z gmaila", "odpowiedz na wiadomość gmail", "wyślij załącznik gmailem".'
 ---
 
 # gmail-send

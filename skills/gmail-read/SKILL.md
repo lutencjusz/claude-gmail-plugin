@@ -1,6 +1,6 @@
 ---
 name: gmail-read
-description: Use when reading or searching the Gmail mailbox — listing messages by Gmail query, reading a message, or viewing a thread. Triggers: "sprawdź maile na gmailu", "znajdź wiadomość od X na gmailu", "przeczytaj nieprzeczytane gmail", "pokaż wątek".
+description: 'Use when reading or searching the Gmail mailbox — listing messages by Gmail query, reading a message, or viewing a thread. Triggers: "sprawdź maile na gmailu", "znajdź wiadomość od X na gmailu", "przeczytaj nieprzeczytane gmail", "pokaż wątek".'
 ---
 
 # gmail-read
