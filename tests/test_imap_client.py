@@ -90,3 +90,19 @@ def test_parse_full_extracts_body_and_attachments():
     out = parse_full(m)
     assert out["body_text"].startswith("tekst")
     assert "f.pdf" in out["attachments"]
+
+
+def test_search_encodes_non_ascii_folder_as_modified_utf7(fake_imap):
+    # Gmail z polskim interfejsem: "[Gmail]/Wysłane" musi pojsc jako modified UTF-7 (RFC 3501)
+    search_uids(fake_imap, "[Gmail]/Wys\u0142ane", ["X-GM-RAW", '"newer_than:1d"'])
+    assert fake_imap.selected == ("[Gmail]/Wys&AUI-ane", True)
+
+
+def test_folder_with_space_and_non_ascii_is_encoded_then_quoted(fake_imap):
+    search_uids(fake_imap, "[Gmail]/Wa\u017cne rzeczy & inne", ["ALL"])
+    assert fake_imap.selected == ('"[Gmail]/Wa&AXw-ne rzeczy &- inne"', True)
+
+
+def test_ascii_folder_already_in_modified_utf7_is_not_reencoded(fake_imap):
+    search_uids(fake_imap, "[Gmail]/Wys&AUI-ane", ["ALL"])
+    assert fake_imap.selected == ("[Gmail]/Wys&AUI-ane", True)

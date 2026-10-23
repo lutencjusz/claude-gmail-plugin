@@ -1,3 +1,4 @@
+import base64
 import email
 import email.policy
 import imaplib
@@ -22,8 +23,36 @@ class IMAPError(Exception):
     """Operacja IMAP zwrocila status inny niz OK."""
 
 
+def _encode_mailbox(name: str) -> str:
+    """Nazwa folderu w modified UTF-7 (RFC 3501 5.1.3), np. '[Gmail]/Wys\\u0142ane' -> '[Gmail]/Wys&AUI-ane'.
+
+    imaplib wysyla komendy w ASCII, wiec polskie znaki konczyly sie bledem 'ascii' codec.
+    Nazwa czysto ASCII idzie bez zmian - moze juz byc w modified UTF-7 (np. z LIST).
+    """
+    if name.isascii():
+        return name
+    out: list[str] = []
+    pending: list[str] = []
+
+    def flush() -> None:
+        if pending:
+            b64 = base64.b64encode("".join(pending).encode("utf-16-be")).decode("ascii")
+            out.append("&" + b64.rstrip("=").replace("/", ",") + "-")
+            pending.clear()
+
+    for ch in name:
+        if 0x20 <= ord(ch) <= 0x7E:
+            flush()
+            out.append("&-" if ch == "&" else ch)
+        else:
+            pending.append(ch)
+    flush()
+    return "".join(out)
+
+
 def _quote_mailbox(name: str) -> str:
     """imaplib.select nie cytuje nazw; nazwy ze spacja (np. 'Wersje robocze') psuja komende."""
+    name = _encode_mailbox(name)
     if name.startswith('"') or not re.search(r'[\s"\()]', name):
         return name
     return '"' + name.replace("\\", "\\\\").replace('"', '\\"') + '"'
